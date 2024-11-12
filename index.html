@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPTV Live Stream</title>
+    <link href="https://vjs.zencdn.net/7.18.1/video-js.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #fff;
+            text-align: center;
+        }
+        .categories {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+        .category {
+            color: #fff;
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #333;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .category:hover {
+            background-color: #555;
+        }
+        .video-container {
+            width: 80%;
+            margin: 20px auto;
+            max-width: 1200px;
+            position: relative;
+        }
+        .resolution-select {
+            margin: 20px 0;
+            background-color: #333;
+            border: none;
+            padding: 10px;
+            font-size: 16px;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .resolution-select:hover {
+            background-color: #555;
+        }
+        /* Loading Spinner */
+        .spinner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1>IPTV Live Stream</h1>
+
+    <!-- Categories will be loaded here -->
+    <div class="categories" id="categoriesContainer"></div>
+
+    <!-- Resolution Selector -->
+    <select id="resolutionSelector" class="resolution-select">
+        <option value="auto">Select Resolution</option>
+    </select>
+
+    <!-- Video Player -->
+    <div class="video-container">
+        <!-- Loading Spinner -->
+        <div id="spinner" class="spinner"></div>
+        <video id="iptvPlayer" class="video-js vjs-default-skin" controls preload="auto" width="100%" height="auto">
+            <source id="streamSource" type="application/x-mpegURL">
+        </video>
+    </div>
+
+    <script src="https://vjs.zencdn.net/7.18.1/video.js"></script>
+    <script>
+        const m3uUrl = "http://m1-max.dns-speedy.com/get.php?username=JOSHUAUGO5386&password=506D4C&type=m3u_plus";
+
+        fetch(m3uUrl)
+            .then(response => response.text())
+            .then(data => {
+                const categories = {};
+                const lines = data.split('\n');
+                let currentCategory = 'Other';
+
+                const streamUrls = {}; // Holds stream URLs for each resolution
+
+                // Parse the M3U playlist
+                lines.forEach(line => {
+                    if (line.startsWith('#EXTINF')) {
+                        const categoryMatch = line.match(/,(.*) - (.*)$/);
+                        const channelName = categoryMatch ? categoryMatch[1].trim() : 'Unknown';
+                        const category = categoryMatch ? categoryMatch[2].trim() : 'Other';
+
+                        if (!categories[category]) {
+                            categories[category] = [];
+                        }
+
+                        const urlIndex = lines.indexOf(line) + 1;
+                        const streamUrl = lines[urlIndex];
+
+                        // Add stream URL by resolution (just a placeholder for now)
+                        const resolution = getResolution(streamUrl);
+                        if (!streamUrls[resolution]) {
+                            streamUrls[resolution] = [];
+                        }
+                        streamUrls[resolution].push({ channelName, streamUrl });
+                    }
+                });
+
+                // Create category buttons
+                const categoriesContainer = document.getElementById('categoriesContainer');
+                for (const category in categories) {
+                    const categoryButton = document.createElement('div');
+                    categoryButton.classList.add('category');
+                    categoryButton.textContent = category;
+                    categoryButton.onclick = () => showCategoryStreams(category, categories[category]);
+
+                    categoriesContainer.appendChild(categoryButton);
+                }
+
+                // Show streams for a specific category
+                function showCategoryStreams(category, streams) {
+                    const streamSelect = document.getElementById('streamSource');
+                    const resolutionSelector = document.getElementById('resolutionSelector');
+                    const player = videojs('iptvPlayer');
+                    player.pause(); // Stop the current stream
+
+                    // Dynamically load streams for the category
+                    const streamListHtml = streams.map(stream => {
+                        return `<div class="category" onclick="changeStream('${stream.streamUrl}')">${stream.channelName}</div>`;
+                    }).join('');
+                    categoriesContainer.innerHTML = streamListHtml;
+
+                    function changeStream(streamUrl) {
+                        streamSelect.src = streamUrl;
+                        player.play();
+
+                        // Hide the spinner after stream starts
+                        document.getElementById('spinner').style.display = 'none';
+
+                        // Show loading spinner before stream loads
+                        document.getElementById('spinner').style.display = 'block';
+
+                        // Update resolution options based on available stream resolutions
+                        updateResolutionOptions(streamUrl);
+                    }
+
+                    // Update resolution options dynamically
+                    function updateResolutionOptions(streamUrl) {
+                        resolutionSelector.innerHTML = "<option value='auto'>Select Resolution</option>";
+                        for (const resolution in streamUrls) {
+                            const option = document.createElement('option');
+                            option.value = resolution;
+                            option.text = `${resolution}`;
+                            resolutionSelector.appendChild(option);
+                        }
+
+                        resolutionSelector.onchange = () => {
+                            const selectedResolution = resolutionSelector.value;
+                            if (selectedResolution !== 'auto') {
+                                changeStream(streamUrls[selectedResolution][0].streamUrl);
+                            }
+                        };
+                    }
+                }
+
+                // Get stream resolution (placeholder logic, adjust as needed)
+                function getResolution(streamUrl) {
+                    if (streamUrl.includes('1080p')) {
+                        return '1080p';
+                    } else if (streamUrl.includes('720p')) {
+                        return '720p';
+                    } else {
+                        return 'auto';
+                    }
+                }
+            })
+            .catch(error => console.error('Error loading M3U file:', error));
+
+        var player = videojs('iptvPlayer');
+    </script>
+</body>
+</html>
